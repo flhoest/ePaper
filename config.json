@@ -1,0 +1,6 @@
+{
+  "wifi_ssid": "my_ssid",
+  "wifi_pass": "my_pass",
+  "ha_url": "http://my_homeassistant:8123",
+  "ha_token": "my_token"
+}
