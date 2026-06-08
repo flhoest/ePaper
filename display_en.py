@@ -1,5 +1,5 @@
 # =============================================================
-#  display.py — Driver + layout v4 ePaper 7.5" B V2 (BWR 800x480)
+#  display_en.py — Driver + layout v4 ePaper 7.5" B V2 (BWR 800x480)
 #  MicroPython on ESP32 Waveshare e-Paper Driver Board.
 #
 #  Phase 2c: layout overhaul based on HTML mockup
@@ -14,6 +14,9 @@
 #
 #  You can remove the legacy files:
 #    barlow_bold_44.py, archivo_18.py, archivo_13.py
+#
+#  CITY_NAME below is the only place where the city label is set.
+#  Change it to your own city.
 # =============================================================
 
 from machine import Pin, SPI
@@ -22,28 +25,17 @@ import framebuf, time, gc
 PIN_CS, PIN_DC, PIN_RST, PIN_BUSY = 15, 27, 26, 25
 PIN_SCK, PIN_MOSI = 13, 14
 WIDTH, HEIGHT = 800, 480
+BUFSZ = WIDTH * HEIGHT // 8
 
-# ---------------------------------------------------------------
-#  ENGLISH VERSION NOTES
-#  -----------------------------------------------------------
-#  1. CITY_NAME below is the only place where the city label is set.
-#     Change it to your own city (or leave empty for no city line).
-#  2. Some fonts (barlow_bold_28 = F_MED, barlow_bold_40 = F_BIG) may
-#     have been generated with a PARTIAL CHARSET to save RAM. If you
-#     see "?" glyphs on screen for words like INSUFFICIENT, AVAILABLE,
-#     PK/OFF, etc., regenerate the .py font files including the
-#     letters you need (see font_to_py from Peter Hinch).
-# ---------------------------------------------------------------
 CITY_NAME = "CITYNAME"   # <- replace with your city, e.g. "BOSTON"
 
-BUFSZ = WIDTH * HEIGHT // 8
 
 
 # ---------------------------------------------------------------
 #  Pre-allocated framebuffer (anti-fragmentation)
 #
 #  The MicroPython heap fragments quickly after a few imports +
-#  JSON parsing + WiFi. Result: a bytearray(48000) call later
+#  JSON parsing + WiFi. Result: a later bytearray(48000) call
 #  fails ("memory allocation failed") even with 100+ KB free in
 #  total — it just lacks 48 KB CONTIGUOUS.
 #
@@ -71,14 +63,14 @@ def _get_buf():
 
 
 def free_buffer():
-    """Free the 48 KB framebuffer. Call when no longer needed
-    de rendu jusqu'au prochain reboot (typiquement après render_portal_screen
-    en mode captif). Donne ~48 Ko en plus à ESP-IDF pour les buffers
-    WiFi/LWIP/DHCP. Sera re-alloué auto au prochain _get_buf() si besoin."""
+    """Free the 48 KB framebuffer. Call when rendering is no longer needed
+    until the next reboot (typically after render_portal_screen in captive
+    mode). Gives ~48 KB back to ESP-IDF for the WiFi/LWIP/DHCP buffers.
+    Will be re-allocated automatically on next _get_buf() if needed."""
     global _BUF
     _BUF = None
     gc.collect()
-    print("Framebuffer libéré, mem libre :", gc.mem_free())
+    print("Framebuffer released, free mem:", gc.mem_free())
 
 
 # ---------------------------------------------------------------
@@ -102,7 +94,7 @@ class EPD:
         t0 = time.ticks_ms()
         while self.busy.value() == 0:
             if time.ticks_diff(time.ticks_ms(), t0) > 30000:
-                print("EPD: timeout sur", label); return
+                print("EPD: timeout on", label); return
             time.sleep_ms(20)
 
     def _cmd(self, c):
@@ -255,14 +247,14 @@ TZ_OFFSET = 2 * 3600
 
 
 def _is_hp(hour):
-    """Tarif Heure Pleine ORES (grille 2026, depuis le 1er janvier) :
+    """Peak-hour tariff (peak/off-peak schedule):
        PEAK: 7-11 AM and 5-10 PM, **every day** (weekday and weekend identical)
        OFF-PEAK: the rest (10 PM - 7 AM and 11 AM - 5 PM)"""
     return (7 <= hour < 11) or (17 <= hour < 22)
 
 
 def _fmt(x, decimals=1):
-    """Format a number with the given decimal places: 14.2 -> '14.2'."""
+    """Format a number with the given decimals: 14.2 -> '14.2'."""
     return ("{:." + str(decimals) + "f}").format(x)
 
 
@@ -324,7 +316,7 @@ def _draw_dashboard(d, data, hourly, now, refresh_min, battery, F_HERO, F_BIG, F
     # ============ OUTER BORDER (rect + edge vlines for visibility) ============
     d.rect(0, 0, WIDTH, HEIGHT, BLACK)
     d.rect(1, 1, WIDTH - 2, HEIGHT - 2, BLACK)
-    # Safety: a vertical line 2 px from the right edge (in case the panel clips)
+    # Safety: vertical line 2 px from the right edge (in case the panel clips)
     d.vline(WIDTH - 3, 0, HEIGHT, BLACK)
     d.vline(2,         0, HEIGHT, BLACK)
 
@@ -389,17 +381,17 @@ def _draw_dashboard(d, data, hourly, now, refresh_min, battery, F_HERO, F_BIG, F
     d.text_pro("HOURLY PRODUCTION", LX, hist_t_y, F_LAB, BLACK)
     # Peak/off-peak legend, right-aligned
     leg_x = LX + LW
-    leg_x -= measure(F_LAB, "OFF")
-    d.text_pro("OFF", leg_x, hist_t_y, F_LAB, BLACK)
+    leg_x -= measure(F_LAB, "HC")
+    d.text_pro("HC", leg_x, hist_t_y, F_LAB, BLACK)
     leg_x -= 4 + BULLET
     d.fill_rect(leg_x, hist_t_y + 2, BULLET, BULLET, BLACK)
     leg_x -= 14
-    leg_x -= measure(F_LAB, "PK")
-    d.text_pro("PK", leg_x, hist_t_y, F_LAB, BLACK)
+    leg_x -= measure(F_LAB, "HP")
+    d.text_pro("HP", leg_x, hist_t_y, F_LAB, BLACK)
     leg_x -= 4 + BULLET
     d.fill_rect(leg_x, hist_t_y + 2, BULLET, BULLET, RED)
 
-    # --- Bars: rolling 12h window, 30-min slots (24 bars) ---
+    # --- Bars: rolling 12h window in 30-min slots (24 bars) ---
     hist_y0 = hist_t_y + 18
     hist_h  = 125
     hist_base = hist_y0 + hist_h
@@ -415,7 +407,7 @@ def _draw_dashboard(d, data, hourly, now, refresh_min, battery, F_HERO, F_BIG, F
     current_h = now[3]
     current_m = now[4]
     end_slot_min   = (current_h * 60 + current_m) // bucket_min * bucket_min + bucket_min
-    window_start_min = end_slot_min - n_bars * bucket_min   # peut être négatif (hier)
+    window_start_min = end_slot_min - n_bars * bucket_min   # may be negative (yesterday)
     for i, val in enumerate(padded):
         x = LX + i * (bar_pix + gap_pix)
         h_px = int(val / mx * hist_h)
@@ -425,7 +417,7 @@ def _draw_dashboard(d, data, hourly, now, refresh_min, battery, F_HERO, F_BIG, F
         if h_px > 0:
             d.fill_rect(x, hist_base - h_px, bar_pix, h_px, col)
     d.hline(LX, hist_base + 1, LW, BLACK)
-    # Time labels: 4 labels every 3h at indexes (0, 6, 12, 18)
+    # Hourly labels: 4 labels every 3h at indexes (0, 6, 12, 18)
     axis_y = hist_base + 5
     label_indices = (0, 6, 12, 18)
     for idx in label_indices:
@@ -465,11 +457,8 @@ def _draw_dashboard(d, data, hourly, now, refresh_min, battery, F_HERO, F_BIG, F
     tar_h = 36
     d.rect(RX, tar_y, RW, tar_h, BLACK)
     d.text_pro("CURRENT RATE", RX + 10, tar_y + 12, F_LAB, BLACK)
-    # The HA sensor returns "HP" (heures pleines) or "HC" (heures creuses).
-    # We translate to PK / OFF for the English display.
-    tarif_raw = data.get("tarif", "?")
-    tarif = "PK" if tarif_raw == "HP" else ("OFF" if tarif_raw == "HC" else tarif_raw)
-    tarif_color = RED if tarif_raw == "HP" else BLACK
+    tarif = data.get("tarif", "?")
+    tarif_color = RED if tarif == "HP" else BLACK
     tw = measure(F_MED, tarif)
     d.text_pro(tarif, RX + RW - tw - 12, tar_y + 4, F_MED, tarif_color)
 
@@ -498,7 +487,7 @@ def _draw_dashboard(d, data, hourly, now, refresh_min, battery, F_HERO, F_BIG, F
     d.text_pro("SURPLUS", RX + 10 + BULLET + 8, surp_y + 9, F_LAB, BLACK)
 
     if data.get("surplus_ok") and data.get("surplus_kw", 0) > 0.05:
-        sw_s = _fr(data["surplus_kw"], 1) + " kW"
+        sw_s = _fmt(data["surplus_kw"], 1) + " kW"
         sw_w = measure(F_BIG, sw_s)
         d.text_pro(sw_s, RX + (RW - sw_w) // 2, surp_y + 28, F_BIG, RED)
         msg2 = "AVAILABLE"
@@ -514,31 +503,29 @@ def _draw_dashboard(d, data, hourly, now, refresh_min, battery, F_HERO, F_BIG, F
     d.hline(MARGIN, foot_y - 8, WIDTH - 2 * MARGIN, BLACK)
 
     # Battery block (optional) on the left, before SUNRISE/SUNSET
+    # The whole icon (body + tip + fill + text) turns RED when CHARGING
+    # (USB-C plugged in) OR when battery is low (<20%). Otherwise BLACK.
     foot_l_x = MARGIN
     if battery is not None:
         pct       = battery.get("percent", 0)
         charging  = battery.get("charging", False)
         is_low    = pct < 20
+        # Single color for the whole battery block
+        icon_color = RED if (charging or is_low) else BLACK
         # Battery icon: 20x10 body + 2x4 tip, vertically aligned with the text
         bx, by = MARGIN, foot_y + 2
         bw, bh = 20, 10
-        d.rect(bx, by, bw, bh, BLACK)
-        d.fill_rect(bx + bw, by + 3, 2, bh - 6, BLACK)
-        fill_color = RED if (is_low or charging) else BLACK
+        d.rect(bx, by, bw, bh, icon_color)
+        d.fill_rect(bx + bw, by + 3, 2, bh - 6, icon_color)
         fill_w = max(0, min(bw - 2, int((bw - 2) * pct / 100 + 0.5)))
         if fill_w > 0:
-            d.fill_rect(bx + 1, by + 1, fill_w, bh - 2, fill_color)
-        # Percentage text
+            d.fill_rect(bx + 1, by + 1, fill_w, bh - 2, icon_color)
+        # Percentage text (same color as the icon for visual consistency)
         text_x = bx + bw + 4
-        text_col = RED if is_low else BLACK
         pct_s = "{}%".format(pct)
-        d.text_pro(pct_s, text_x, foot_y, F_LAB, text_col)
+        d.text_pro(pct_s, text_x, foot_y, F_LAB, icon_color)
         text_x += measure(F_LAB, pct_s)
-        # "+" marker when charging
-        if charging:
-            d.text_pro("+", text_x + 2, foot_y, F_LAB, RED)
-            text_x += measure(F_LAB, "+") + 2
-        foot_l_x = text_x + 12        # separator before SUNRISE
+        foot_l_x = text_x + 12        # visual separator before SUNRISE
 
     foot_l = "SUNRISE {}  -  SUNSET {}".format(
         data.get("lever", "--:--"), data.get("coucher", "--:--"))
@@ -546,19 +533,19 @@ def _draw_dashboard(d, data, hourly, now, refresh_min, battery, F_HERO, F_BIG, F
     foot_r = "HOME ASSISTANT  -  UPD {:02d}/{:02d}  -  {:02d}:{:02d}  (refresh {} min)".format(
         now[2], now[1], now[3], now[4], refresh_min)
     foot_r_w = measure(F_LAB, foot_r)
-    # WiFi RSSI icon on the far right, just after the (refresh X min) text
+    # WiFi RSSI icon at the far right, just after the (refresh X min) text
     rssi = data.get("wifi_rssi")
-    icon_offset = (30 + 8) if rssi is not None else 0   # 30 px icône + 8 px de gap
+    icon_offset = (30 + 8) if rssi is not None else 0   # 30 px icon + 8 px gap
     d.text_pro(foot_r, WIDTH - MARGIN - foot_r_w - icon_offset, foot_y, F_LAB, BLACK)
     if rssi is not None:
         _draw_wifi_icon(d, WIDTH - MARGIN - 30, foot_y - 6, rssi)
 
 
 def _free_fonts(*names):
-    """Libère les modules de polices après un rendu, sinon ils squattent
-    ~15-20 Ko de RAM jusqu'au prochain reset. Critique pour le portail
-    captif où on rend l'écran AVANT d'activer l'AP — sans free,
-    l'AP peut OOM faute de buffers WiFi."""
+    """Free the font modules after a render, otherwise they squat
+    ~15-20 KB of RAM until the next reset. Critical for the captive
+    portal where we render the screen BEFORE activating the AP — without
+    freeing them, the AP can OOM due to missing WiFi buffers."""
     import sys
     for n in names:
         if n in sys.modules:
@@ -593,15 +580,15 @@ def render_dashboard(data, hourly, refresh_min=10, battery=None):
 #  Status screens (captive portal, network errors, etc.)
 # ---------------------------------------------------------------
 def render_status(title, lines, color_title=None):
-    """Écran de statut générique :
-       title       : str, grande ligne centrée en haut (Barlow Bold 40)
-       lines       : list de tuples (label, value)
-                     label = petite ligne explicative (Archivo Bold 13)
-                     value = mise en évidence (Archivo Bold 24)
-       color_title : Display.BLACK ou Display.RED (défaut BLACK)
+    """Generic status screen:
+       title       : str, large centered line at the top (Barlow Bold 40)
+       lines       : list of (label, value) tuples
+                     label = small explanatory line (Archivo Bold 13)
+                     value = highlighted value (Archivo Bold 24)
+       color_title : Display.BLACK or Display.RED (default BLACK)
     """
     gc.collect()
-    print("Render status :", title)
+    print("Render status:", title)
     buf = _get_buf()
     gc.collect()
     d = Display(buf=buf)
@@ -641,26 +628,26 @@ def render_status(title, lines, color_title=None):
 
     d.render()
     _free_fonts("barlow_bold_40", "archivo_bold_24", "archivo_bold_13")
-    print("Render status terminé, mem libre :", gc.mem_free())
+    print("Render status done, free mem:", gc.mem_free())
 
 
 def render_portal_screen(ssid, password, ip="192.168.4.1"):
-    """Affiche les infos de configuration WiFi quand le portail captif tourne.
-    Si password est vide ("" ou None), la ligne MOT DE PASSE est omise
-    (réseau ouvert).
-    Libère le framebuffer après rendu — le portail tourne jusqu'au reboot,
-    on n'aura plus besoin de la dalle, et ESP-IDF a besoin de cette RAM
-    pour le DHCP server (sinon le téléphone n'obtient pas d'IP)."""
-    lines = [("CONNECTE-TOI AU WIFI :", ssid)]
+    """Display WiFi setup info while the captive portal is running.
+    If password is empty ("" or None), the PASSWORD line is omitted
+    (open network).
+    Frees the framebuffer after rendering — the portal runs until reboot,
+    we no longer need the panel, and ESP-IDF needs this RAM for the
+    DHCP server (otherwise the phone won't get an IP)."""
+    lines = [("CONNECT TO WIFI:", ssid)]
     if password:
-        lines.append(("MOT DE PASSE :", password))
-    lines.append(("PUIS OUVRE DANS UN NAVIGATEUR :", "http://" + ip))
-    render_status("CONFIGURATION WIFI", lines)
+        lines.append(("PASSWORD:", password))
+    lines.append(("THEN OPEN IN A BROWSER:", "http://" + ip))
+    render_status("WIFI SETUP", lines)
     free_buffer()
 
 
 def render_error(title, message, retry_min=2):
-    """Show an error screen (red title + message + retry delay)."""
+    """Display an error screen (red title + message + retry delay)."""
     lines = [("DETAIL:", message)]
     if retry_min > 0:
         unit = "MINUTE" if retry_min == 1 else "MINUTES"
@@ -682,7 +669,7 @@ def demo_dashboard():
     mock_hourly = [0.05, 0.08, 0.12, 0.18, 0.30, 0.48, 0.62, 0.85,
                    0.95, 1.10, 1.20, 1.30, 1.40, 1.42, 1.30, 1.18,
                    1.00, 0.80, 0.55, 0.35, 0.20, 0.10, 0.05, 0.02]
-    mock_battery = {"percent": 73, "voltage": 3.85, "charging": False}
+    mock_battery = {"percent": 73, "voltage": 3.85, "charging": True}
     render_dashboard(mock_data, mock_hourly, refresh_min=10, battery=mock_battery)
 
 
