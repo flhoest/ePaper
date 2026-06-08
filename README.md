@@ -1,5 +1,7 @@
 # GNI ePaper Dashboard
 
+Supporting blog post : https://www.lets-talk-about.tech/2026/06/home-assistant-solar-self-consumption.html
+
 > 🇫🇷 Tableau de bord énergie domestique sur dalle e-paper 7,5" tricolore alimenté par Home Assistant.<br>
 > 🇬🇧 Home energy dashboard on a 7.5" tricolor e-paper panel powered by Home Assistant.<br>
 > ESP32 + MicroPython + Waveshare 7.5" B V2 BWR (800×480) + LiPo battery.
