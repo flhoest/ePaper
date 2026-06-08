@@ -11,6 +11,9 @@
 #    barlow_bold_40.py    (date title + PV maintenant)
 #    barlow_bold_28.py    (nombres secondaires + kWh next-to-hero)
 #    archivo_bold_13.py   (tous les labels small caps)
+#
+#  Tu peux supprimer les anciens fichiers :
+#    barlow_bold_44.py, archivo_18.py, archivo_13.py
 # =============================================================
 
 from machine import Pin, SPI
@@ -494,30 +497,29 @@ def _draw_dashboard(d, data, hourly, now, refresh_min, battery, F_HERO, F_BIG, F
     d.hline(MARGIN, foot_y - 8, WIDTH - 2 * MARGIN, BLACK)
 
     # Bloc batterie (optionnel) à gauche, avant LEVER/COUCHER
+    # Toute l'icône (corps + tip + remplissage + texte) passe en ROUGE
+    # quand on est en CHARGE (USB-C branché) OU quand la batterie est faible (<20%).
+    # Sinon, tout est NOIR.
     foot_l_x = MARGIN
     if battery is not None:
         pct       = battery.get("percent", 0)
         charging  = battery.get("charging", False)
         is_low    = pct < 20
+        # Couleur unique pour tout le bloc batterie
+        icon_color = RED if (charging or is_low) else BLACK
         # Icône batterie : corps 20x10 + tip 2x4, alignée verticalement avec le texte
         bx, by = MARGIN, foot_y + 2
         bw, bh = 20, 10
-        d.rect(bx, by, bw, bh, BLACK)
-        d.fill_rect(bx + bw, by + 3, 2, bh - 6, BLACK)
-        fill_color = RED if (is_low or charging) else BLACK
+        d.rect(bx, by, bw, bh, icon_color)
+        d.fill_rect(bx + bw, by + 3, 2, bh - 6, icon_color)
         fill_w = max(0, min(bw - 2, int((bw - 2) * pct / 100 + 0.5)))
         if fill_w > 0:
-            d.fill_rect(bx + 1, by + 1, fill_w, bh - 2, fill_color)
-        # Texte pct
+            d.fill_rect(bx + 1, by + 1, fill_w, bh - 2, icon_color)
+        # Texte pct (même couleur que l'icône pour cohérence visuelle)
         text_x = bx + bw + 4
-        text_col = RED if is_low else BLACK
         pct_s = "{}%".format(pct)
-        d.text_pro(pct_s, text_x, foot_y, F_LAB, text_col)
+        d.text_pro(pct_s, text_x, foot_y, F_LAB, icon_color)
         text_x += measure(F_LAB, pct_s)
-        # Marqueur "+" si en charge
-        if charging:
-            d.text_pro("+", text_x + 2, foot_y, F_LAB, RED)
-            text_x += measure(F_LAB, "+") + 2
         foot_l_x = text_x + 12        # séparateur visuel avant LEVER
 
     foot_l = "LEVER {}  -  COUCHER {}".format(
@@ -662,7 +664,7 @@ def demo_dashboard():
     mock_hourly = [0.05, 0.08, 0.12, 0.18, 0.30, 0.48, 0.62, 0.85,
                    0.95, 1.10, 1.20, 1.30, 1.40, 1.42, 1.30, 1.18,
                    1.00, 0.80, 0.55, 0.35, 0.20, 0.10, 0.05, 0.02]
-    mock_battery = {"percent": 73, "voltage": 3.85, "charging": False}
+    mock_battery = {"percent": 73, "voltage": 3.85, "charging": True}
     render_dashboard(mock_data, mock_hourly, refresh_min=10, battery=mock_battery)
 
 
