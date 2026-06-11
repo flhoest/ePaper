@@ -1,4 +1,4 @@
-# GNI ePaper Dashboard
+# ePaper Dashboard
 
 Supporting blog post : https://www.lets-talk-about.tech/2026/06/home-assistant-solar-self-consumption.html
 
